@@ -1,30 +1,72 @@
 #!/usr/bin/env bash
 #
+SCRIPT_PATH="$( cd "$(dirname "$0")" ; pwd -P )"
+have_real=$(type -p realpath)
+[ "${have_real}" ] && SCRIPT_PATH="$(realpath "$SCRIPT_PATH")"
+
+arch=$(uname -m)
+[ "${arch}" == "arm64" ] || arch="amd64"
+platform=$(uname -s)
+plat="linux"
+[ "${platform}" == "Darwin" ] && plat="darwin"
 
 install_external_package() {
   API_URL="https://api.github.com/repos/${OWNER}/${PROJECT}/releases/latest"
+  if [ "${plat}" == "darwin" ]; then
+    suff="dmg"
+  else
+    suff="deb"
+  fi
   DL_URL=
   DL_URL=$(curl --silent ${AUTH_HEADER} "${API_URL}" \
     | jq --raw-output '.assets | .[]?.browser_download_url' \
-    | grep "amd64\.deb")
+    | grep "\.${suff}$")
 
   [ "${DL_URL}" ] && {
-    printf "\n\tInstalling %s ..." "${PROJECT}"
-    TEMP_DEB="$(mktemp --suffix=.deb)"
-    wget --quiet -O "${TEMP_DEB}" "${DL_URL}"
-    chmod 644 "${TEMP_DEB}"
-    sudo apt-get install -y "${TEMP_DEB}"
-    rm -f "${TEMP_DEB}"
-    printf " done"
+    printf "\n\tInstalling %s" "${PROJECT}"
+    TEMP_PKG="$(mktemp --suffix=.${suff})"
+    wget --quiet -O "${TEMP_PKG}" "${DL_URL}"
+    chmod 644 "${TEMP_PKG}"
+    if [ "${plat}" == "darwin" ]; then
+      have_mount=$(type -p hdiutil)
+      [ "${have_mount}" ] && {
+        [ -d "$HOME"/Applications ] || mkdir -p "$HOME"/Applications
+        hdiutil attach "${TEMP_PKG}"
+        volname=$(ls -d /Volumes/Obsidian*universal)
+        [ -d "${volname}" ] && {
+          [ -d "$HOME"/Applications/Obsidian.app ] && {
+            rm -rf "$HOME"/Applications/Obsidian.app
+          }
+          cp -a "${volname}/Obsidian.app "$HOME"/Applications
+          hdiutil detach "${volname}"
+        }
+      }
+    else
+      have_apt=$(type -p apt)
+      [ "${have_apt}" ] && sudo apt install -y "${TEMP_PKG}"
+    fi
+    rm -f "${TEMP_PKG}"
   }
 }
 
 install_go() {
-  curl --silent --location --output /tmp/go.tgz \
-       https://go.dev/dl/go1.21.5.linux-amd64.tar.gz
+  go_version="1.22.1"
   [ -d /usr/local ] || sudo mkdir -p /usr/local
-  sudo tar -C /usr/local -xf /tmp/go.tgz
-  rm -f /tmp/go.tgz
+  if [ "${plat}" == "darwin" ]; then
+    curl --silent --location --output /tmp/go$$.pkg \
+         https://go.dev/dl/go${go_version}.darwin-${arch}.pkg
+    installer -pkg /tmp/go$$.pkg -target /
+    rm -f /tmp/go$$.pkg
+  else
+    if [ "${arch}" == "arm64" ]; then
+      printf "\nARM architechture Go install not supported.\n"
+    else
+      curl --silent --location --output /tmp/go$$.tgz \
+           https://go.dev/dl/go${go_version}.linux-amd64.tar.gz
+      sudo tar -C /usr/local -xf /tmp/go$$.tgz
+      rm -f /tmp/go$$.tgz
+    fi
+  fi
 }
 
 install_obs() {
@@ -32,7 +74,7 @@ install_obs() {
   DL_URL=
   DL_URL=$(curl --silent ${AUTH_HEADER} "${API_URL}" \
     | jq --raw-output '.assets | .[]?.browser_download_url' \
-    | grep "obsidian-cli" | grep "linux_amd64\.tar\.gz")
+    | grep "obsidian-cli" | grep "${plat}_${arch}\.tar\.gz")
 
   [ "${DL_URL}" ] && {
     printf "\n\tInstalling OBS ..."
@@ -66,27 +108,34 @@ install_obs() {
 }
 
 if [ -d ${HOME}/bin ]; then
-  cp bin/* ${HOME}/bin
+  cp ${SCRIPT_PATH}/bin/* ${HOME}/bin
 else
-  cp -a bin ${HOME}/bin
+  cp -a ${SCRIPT_PATH}/bin ${HOME}/bin
 fi
 
 [ -d ${HOME}/.config/ranger ] || mkdir -p ${HOME}/.config/ranger
-cp commands_full.py commands.py rc.conf rifle.conf scope.sh ${HOME}/.config/ranger
+for rfc in commands_full.py commands.py rc.conf rifle.conf scope.sh
+do
+  [ -f ${HOME}/.config/ranger/${rfc} ] && {
+    cp ${HOME}/.config/ranger/${rfc} ${HOME}/.config/ranger/${rfc}.bak
+  }
+  cp ${SCRIPT_PATH}/${rfc} ${HOME}/.config/ranger/${rfc}
+done
 chmod 755 ${HOME}/.config/ranger/*.sh
 if [ -d ${HOME}/.config/ranger/plugins ]; then
   for plug in zoxide ranger-fzf-filter ranger_devicons
   do
     if [ -d ${HOME}/.config/ranger/plugins/${plug} ]; then
-      cp plugins/${plug}/* ${HOME}/.config/ranger/plugins/${plug}
+      cp ${SCRIPT_PATH}/plugins/${plug}/* ${HOME}/.config/ranger/plugins/${plug}
     else
-      cp -a plugins/${plug} ${HOME}/.config/ranger/plugins
+      cp -a ${SCRIPT_PATH}/plugins/${plug} ${HOME}/.config/ranger/plugins
     fi
   done
 else
-  cp -a plugins ${HOME}/.config/ranger
+  cp -a ${SCRIPT_PATH}/plugins ${HOME}/.config/ranger
 fi
 
+cd ${SCRIPT_PATH}
 find share -type f | while read i
 do
   [ -f ${HOME}/.local/$i ] || {
@@ -124,12 +173,12 @@ install_external_package
 
 export PATH="$HOME/bin:$HOME/.local/bin:$PATH"
 
-/usr/local/go/bin/go install github.com/charmbracelet/glow@latest
+[ -x /usr/local/go/bin/go ] && {
+  /usr/local/go/bin/go install github.com/charmbracelet/glow@latest
+}
 git clone https://github.com/doctorfree/cheat-sheets-plus ${HOME}/Documents/cheat-sheets-plus
-tar xzf ${HOME}/.config/obsidian.tar.gz -C ${HOME}/.config
-rm -f ${HOME}/.config/obsidian.tar.gz
-tar xzf ${HOME}/.config/dotobsidian.tar.gz -C ${HOME}/Documents/cheat-sheets-plus
-rm -f ${HOME}/.config/dotobsidian.tar.gz
 have_mime=$(type -p xdg-mime)
 [ "${have_mime}" ] && xdg-mime default obsidian.desktop x-scheme-handler/obsidian
-/usr/local/bin/obs-cli set-default cheat-sheets-plus
+[ -x /usr/local/bin/obs-cli ] && {
+  /usr/local/bin/obs-cli set-default cheat-sheets-plus
+}
