@@ -23,7 +23,7 @@ install_external_package() {
     | grep "\.${suff}$")
 
   [ "${DL_URL}" ] && {
-    printf "\n\tInstalling %s" "${PROJECT}"
+    printf "\nInstalling %s\n" "${PROJECT}"
     TEMP_PKG="$(mktemp --suffix=.${suff})"
     wget --quiet -O "${TEMP_PKG}" "${DL_URL}"
     chmod 644 "${TEMP_PKG}"
@@ -31,14 +31,14 @@ install_external_package() {
       have_mount=$(type -p hdiutil)
       [ "${have_mount}" ] && {
         [ -d "$HOME"/Applications ] || mkdir -p "$HOME"/Applications
-        hdiutil attach "${TEMP_PKG}"
+        sudo hdiutil attach "${TEMP_PKG}"
         volname=$(ls -d /Volumes/Obsidian*universal)
         [ -d "${volname}" ] && {
           [ -d "$HOME"/Applications/Obsidian.app ] && {
             rm -rf "$HOME"/Applications/Obsidian.app
           }
-          cp -a "${volname}/Obsidian.app "$HOME"/Applications
-          hdiutil detach "${volname}"
+          cp -a "${volname}"/Obsidian.app "$HOME"/Applications
+          sudo hdiutil detach "${volname}"
         }
       }
     else
@@ -55,7 +55,7 @@ install_go() {
   if [ "${plat}" == "darwin" ]; then
     curl --silent --location --output /tmp/go$$.pkg \
          https://go.dev/dl/go${go_version}.darwin-${arch}.pkg
-    installer -pkg /tmp/go$$.pkg -target /
+    sudo installer -pkg /tmp/go$$.pkg -target /
     rm -f /tmp/go$$.pkg
   else
     if [ "${arch}" == "arm64" ]; then
@@ -77,7 +77,7 @@ install_obs() {
     | grep "obsidian-cli" | grep "${plat}_${arch}\.tar\.gz")
 
   [ "${DL_URL}" ] && {
-    printf "\n\tInstalling OBS ..."
+    printf "\nInstalling OBS ..."
     TEMP_TGZ="$(mktemp --suffix=.tgz)"
     wget --quiet -O "${TEMP_TGZ}" "${DL_URL}"
     chmod 644 "${TEMP_TGZ}"
@@ -176,7 +176,13 @@ export PATH="$HOME/bin:$HOME/.local/bin:$PATH"
 [ -x /usr/local/go/bin/go ] && {
   /usr/local/go/bin/go install github.com/charmbracelet/glow@latest
 }
-git clone https://github.com/doctorfree/cheat-sheets-plus ${HOME}/Documents/cheat-sheets-plus
+if [ -d ${HOME}/Documents/cheat-sheets-plus ]; then
+  [ -d ${HOME}/Documents/cheat-sheets-plus/.git ] && {
+    git -C ${HOME}/Documents/cheat-sheets-plus pull
+  }
+else
+  git clone https://github.com/doctorfree/cheat-sheets-plus ${HOME}/Documents/cheat-sheets-plus
+fi
 have_mime=$(type -p xdg-mime)
 [ "${have_mime}" ] && xdg-mime default obsidian.desktop x-scheme-handler/obsidian
 [ -x /usr/local/bin/obs-cli ] && {
