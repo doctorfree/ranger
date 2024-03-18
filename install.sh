@@ -117,7 +117,10 @@ fi
 for rfc in commands_full.py commands.py rc.conf rifle.conf scope.sh
 do
   [ -f ${HOME}/.config/ranger/${rfc} ] && {
-    cp ${HOME}/.config/ranger/${rfc} ${HOME}/.config/ranger/${rfc}.bak
+    diff ${SCRIPT_PATH}/${rfc} ${HOME}/.config/ranger/${rfc} > /dev/null || {
+      printf "\nBacking up ${HOME}/.config/ranger/${rfc} as ${HOME}/.config/ranger/${rfc}.bak\n"
+      cp ${HOME}/.config/ranger/${rfc} ${HOME}/.config/ranger/${rfc}.bak
+    }
   }
   cp ${SCRIPT_PATH}/${rfc} ${HOME}/.config/ranger/${rfc}
 done
