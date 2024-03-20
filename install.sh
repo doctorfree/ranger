@@ -49,6 +49,49 @@ install_external_package() {
   }
 }
 
+install_glow() {
+  API_URL="https://api.github.com/repos/${OWNER}/${PROJECT}/releases/latest"
+  if [ "${plat}" == "darwin" ]; then
+    suff="Darwin"
+  else
+    suff="Linux"
+  fi
+  if [ "${arch}" == "arm64" ]; then
+    glow_arch="arm64"
+  else
+    glow_arch="x86_64"
+  fi
+  DL_URL=
+  DL_URL=$(curl --silent ${AUTH_HEADER} "${API_URL}" \
+    | jq --raw-output '.assets | .[]?.browser_download_url' \
+    | grep "_${suff}_${glow_arch}.tar.gz$")
+
+  printf "\nInstalling %s\n" "${PROJECT}"
+  if [ "${DL_URL}" ]; then
+    TEMP_TGZ="$(mktemp --suffix=.${suff})"
+    wget --quiet -O "${TEMP_TGZ}" "${DL_URL}"
+    chmod 644 "${TEMP_TGZ}"
+    mkdir /tmp/glow$$
+    tar -C /tmp/glow$$ -xzf "${TEMP_TGZ}"
+    [ -f /tmp/glow$$/glow ] && {
+      [ -d "${HOME}"/.local/bin ] || mkdir -p "${HOME}"/.local/bin
+      cp /tmp/glow$$/glow "${HOME}"/.local/bin/glow
+      chmod 755 "${HOME}"/.local/bin/glow
+    }
+    rm -f "${TEMP_TGZ}"
+    rm -rf /tmp/glow$$
+  else
+    have_brew=$(type -p brew)
+    [ "${have_brew}" ] && brew install glow >/dev/null 2>&1
+    have_glow=$(type -p glow)
+    [ "${have_glow}" ] || {
+      [ -x /usr/local/go/bin/go ] && {
+        /usr/local/go/bin/go install github.com/charmbracelet/glow@latest
+      }
+    }
+  fi
+}
+
 install_go() {
   go_version="1.22.1"
   [ -d /usr/local ] || sudo mkdir -p /usr/local
@@ -176,9 +219,10 @@ install_external_package
 
 export PATH="$HOME/bin:$HOME/.local/bin:$PATH"
 
-[ -x /usr/local/go/bin/go ] && {
-  /usr/local/go/bin/go install github.com/charmbracelet/glow@latest
-}
+OWNER=charmbracelet
+PROJECT=glow
+install_glow
+
 if [ -d ${HOME}/Documents/cheat-sheets-plus ]; then
   [ -d ${HOME}/Documents/cheat-sheets-plus/.git ] && {
     git -C ${HOME}/Documents/cheat-sheets-plus pull
