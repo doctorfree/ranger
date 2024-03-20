@@ -10,7 +10,7 @@ platform=$(uname -s)
 plat="linux"
 [ "${platform}" == "Darwin" ] && plat="darwin"
 
-install_external_package() {
+install_obsidian_release() {
   API_URL="https://api.github.com/repos/${OWNER}/${PROJECT}/releases/latest"
   if [ "${plat}" == "darwin" ]; then
     suff="dmg"
@@ -24,7 +24,7 @@ install_external_package() {
 
   [ "${DL_URL}" ] && {
     printf "\nInstalling %s\n" "${PROJECT}"
-    TEMP_PKG="$(mktemp --suffix=.${suff})"
+    TEMP_PKG="/tmp/obsidian$$.${suff}"
     wget --quiet -O "${TEMP_PKG}" "${DL_URL}"
     chmod 644 "${TEMP_PKG}"
     if [ "${plat}" == "darwin" ]; then
@@ -68,7 +68,7 @@ install_glow() {
 
   printf "\nInstalling %s\n" "${PROJECT}"
   if [ "${DL_URL}" ]; then
-    TEMP_TGZ="$(mktemp --suffix=.${suff})"
+    TEMP_TGZ="/tmp/glow$$.tgz"
     wget --quiet -O "${TEMP_TGZ}" "${DL_URL}"
     chmod 644 "${TEMP_TGZ}"
     mkdir /tmp/glow$$
@@ -121,7 +121,7 @@ install_obs() {
 
   [ "${DL_URL}" ] && {
     printf "\nInstalling OBS ..."
-    TEMP_TGZ="$(mktemp --suffix=.tgz)"
+    TEMP_TGZ="/tmp/obs$$.tgz"
     wget --quiet -O "${TEMP_TGZ}" "${DL_URL}"
     chmod 644 "${TEMP_TGZ}"
     [ -d /usr/local ] || sudo mkdir -p /usr/local
@@ -215,7 +215,7 @@ install_obs
 
 OWNER=obsidianmd
 PROJECT=obsidian-releases
-install_external_package
+install_obsidian_release
 
 export PATH="$HOME/bin:$HOME/.local/bin:$PATH"
 
