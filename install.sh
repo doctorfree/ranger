@@ -9,6 +9,7 @@ arch=$(uname -m)
 platform=$(uname -s)
 plat="linux"
 [ "${platform}" == "Darwin" ] && plat="darwin"
+have_brew=$(type -p brew)
 
 install_obsidian_release() {
   API_URL="https://api.github.com/repos/${OWNER}/${PROJECT}/releases/latest"
@@ -81,7 +82,6 @@ install_glow() {
     rm -f "${TEMP_TGZ}"
     rm -rf /tmp/glow$$
   else
-    have_brew=$(type -p brew)
     [ "${have_brew}" ] && brew install glow >/dev/null 2>&1
     have_glow=$(type -p glow)
     [ "${have_glow}" ] || {
@@ -150,11 +150,36 @@ install_obs() {
   }
 }
 
+install_ranger() {
+  if [ "${have_brew}" ]; then
+    brew install ranger >/dev/null 2>&1
+  else
+    have_make=$(type -p make)
+    if [ "${have_make}" ]; then
+      printf "\nInstalling ranger\n"
+      HERE=$(pwd)
+      git clone https://github.com/ranger/ranger /tmp/ranger$$ >/dev/null 2>&1
+      cd /tmp/ranger$$
+      git checkout stable >/dev/null 2>&1
+      ${SUDO} make install >/dev/null 2>&1
+      cd "${HERE}"
+      ${SUDO} rm -rf /tmp/ranger$$
+    else
+      printf "\nInstallation of ranger requires 'make' or Homebrew."
+      printf "\nInstall 'make/Homebrew' or install ranger using the native package manager."
+      printf "\nSkipping installation of ranger.\n"
+    fi
+  fi
+}
+
 if [ -d ${HOME}/bin ]; then
   cp ${SCRIPT_PATH}/bin/* ${HOME}/bin
 else
   cp -a ${SCRIPT_PATH}/bin ${HOME}/bin
 fi
+
+have_ranger=$(type -p ranger)
+[ "${have_ranger}" ] || install_ranger
 
 [ -d ${HOME}/.config/ranger ] || mkdir -p ${HOME}/.config/ranger
 for rfc in commands_full.py commands.py rc.conf rifle.conf scope.sh
